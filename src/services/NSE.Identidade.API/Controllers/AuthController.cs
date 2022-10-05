@@ -14,9 +14,9 @@ using JwtRegisteredClaimNames = Microsoft.IdentityModel.JsonWebTokens.JwtRegiste
 
 namespace NSE.Identidade.API.Controllers
 {
-    [ApiController]
+
     [Route("api/identidade")]
-    public class AuthController : Controller
+    public class AuthController : MainController
     {
         private readonly SignInManager<IdentityUser> _signInManager; // Gerenciador de login
         private readonly UserManager<IdentityUser> _userManager;     // Propriedade para administrar o usuário
@@ -35,7 +35,7 @@ namespace NSE.Identidade.API.Controllers
         public async Task<ActionResult> Registrar(UsuarioRegistro usuarioRegistro)
         {
             if (!ModelState.IsValid)
-                return BadRequest();
+                return CustomResponse();
 
             var user = new IdentityUser
             {
@@ -45,20 +45,23 @@ namespace NSE.Identidade.API.Controllers
             };
 
             var result = await _userManager.CreateAsync(user, usuarioRegistro.Senha); // Criando o usuário, a senha é passada como parâmetro para criptografia
+
             if (result.Succeeded)
+                return CustomResponse(await GerarJwt(usuarioRegistro.Email));
+
+            foreach (var error in result.Errors)
             {
-                await _signInManager.SignInAsync(user, false); // Método para logar no sistema
-                return Ok(await GerarJwt(usuarioRegistro.Email));
+                AdicionarErroProcessamento(error.Description);
             }
 
-            return BadRequest();
+            return CustomResponse();
         }
 
         [HttpPost("autenticar")]
         public async Task<ActionResult> Login(UsuarioLogin usuarioLogin)
         {
             if (!ModelState.IsValid)
-                return BadRequest();
+                return CustomResponse();
 
             var result = await _signInManager.PasswordSignInAsync(usuarioLogin.Email,
                                                                   usuarioLogin.Senha,
@@ -66,12 +69,16 @@ namespace NSE.Identidade.API.Controllers
                                                                   true); // bloqueia o usuário por 5 minutos se ficar errando a senha
 
             if (result.Succeeded)
-            {
+                return CustomResponse(await GerarJwt(usuarioLogin.Email));
 
-                return Ok(await GerarJwt(usuarioLogin.Email));
+            if (result.IsLockedOut)
+            {
+                AdicionarErroProcessamento("Usuário temporiamente bloqueado por tentativas inválidas");
+                return CustomResponse();
             }
 
-            return BadRequest();
+            AdicionarErroProcessamento("Usuário ou Senha incorretos");
+            return CustomResponse();
         }
 
 
