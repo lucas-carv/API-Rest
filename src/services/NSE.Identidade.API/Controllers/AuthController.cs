@@ -98,6 +98,10 @@ namespace NSE.Identidade.API.Controllers
         {
             var userRoles = await _userManager.GetRolesAsync(user);
 
+            //  RFC //
+            // - JTI - Fornece um id exclusivo para o JWT, para evitar que um valor seja atribuido a objetos de dados diferentes, evita uma chance 'despresível' de colisões de emissores
+            // - NBF - Identifica o tempo do JWT, para que NÃO seja aceito processamento anterior ao tempo gerado pelo JWT
+            // - IAT - Identifica o momento em que o JWT foi gerado e publicado, pode ser usado para determinar a idade do JWT
             claims.Add(new Claim(JwtRegisteredClaimNames.Sub, user.Id));
             claims.Add(new Claim(JwtRegisteredClaimNames.Email, user.Email));
             claims.Add(new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()));
@@ -145,6 +149,7 @@ namespace NSE.Identidade.API.Controllers
             };
         }
 
+        // Offset padrão necessário para o JWT de datas
         private static long ToUnixEpochDate(DateTime date)
             => (long)Math.Round((date.ToUniversalTime() - new DateTimeOffset(1970, 1, 1, 0, 0, 0, TimeSpan.Zero)).TotalSeconds);
     }
