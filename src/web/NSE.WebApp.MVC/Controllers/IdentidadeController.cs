@@ -1,6 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Mvc;
 using NSE.WebApp.MVC.Models;
 using NSE.WebApp.MVC.Services;
+using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace NSE.WebApp.MVC.Controllers
@@ -29,11 +34,12 @@ namespace NSE.WebApp.MVC.Controllers
                 return View(usuarioRegistro);
 
             // API - Registro
-            await _autenticacaoService.Registro(usuarioRegistro);
+            var resposta = await _autenticacaoService.Registro(usuarioRegistro);
 
-            if (false) return View(usuarioRegistro);
+            //if (false) return View(usuarioRegistro);
 
             // Realizar login na APP
+            await RealizarLogin(resposta);
 
             return RedirectToAction("Index", "Home");
         }
@@ -57,9 +63,10 @@ namespace NSE.WebApp.MVC.Controllers
 
             var resposta = await _autenticacaoService.Login(usuarioLogin);
 
-            if (false) return View(usuarioLogin);
+            //if (false) return View(usuarioLogin);
 
             // Realizar login na APP
+            await RealizarLogin(resposta);
 
             return RedirectToAction("Index", "Home");
         }
@@ -69,6 +76,35 @@ namespace NSE.WebApp.MVC.Controllers
         public async Task<IActionResult> Logout()
         {
             return RedirectToAction("Index", "Home");
+        }
+
+        private async Task RealizarLogin(UsuarioRespostaLogin resposta)
+        {
+            var token = ObterTokenFormatado(resposta.AccessToken);
+
+            var claims = new List<Claim>();
+            claims.Add(new Claim("JWT", resposta.AccessToken));
+            claims.AddRange(token.Claims);
+
+            var claimsIdentity = new ClaimsIdentity(                      // Gera as Claims dentro do Cookie
+                claims,
+                CookieAuthenticationDefaults.AuthenticationScheme);
+
+            var authProperties = new AuthenticationProperties
+            {
+                ExpiresUtc = System.DateTimeOffset.UtcNow.AddMinutes(60), // Tempo de expiração da autenticação do Cookie
+                IsPersistent = true                                       // Configuração para fazer com que o Cookie dure por vários requests
+            };
+
+            await HttpContext.SignInAsync(                                // Método de login do HttpContext
+                CookieAuthenticationDefaults.AuthenticationScheme,        // Parâmetro para dizer ao http que vai trabalhar com o tipo de autenticação com Cookies
+                new ClaimsPrincipal(claimsIdentity),                      // Todas as claims do usuário, inclusive o JWT
+                authProperties);                                          // As configurações da autenticação
+        }
+
+        private static JwtSecurityToken ObterTokenFormatado(string jwtToken)
+        {
+            return new JwtSecurityTokenHandler().ReadToken(jwtToken) as JwtSecurityToken;
         }
     }
 }
